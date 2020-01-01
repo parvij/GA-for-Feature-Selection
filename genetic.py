@@ -44,6 +44,8 @@ class GeneticSelector():
         self.n_children = n_children
         # Probablity of chromosome mutation
         self.mutation_rate = mutation_rate
+	# cashe of fitness
+	self.cashe={}
         
         if int((self.n_best + self.n_rand) / 2) * self.n_children != self.size:
             raise ValueError("The population size is not stable.")  
@@ -61,9 +63,13 @@ class GeneticSelector():
         X, y = self.dataset
         scores = []
         for chromosome in population:
-            score = -1.0 * np.mean(cross_val_score(self.estimator, X[:,chromosome], y, 
+	    if k_chromosome in self.cashe.keys():
+                score = self.cashe[k_chromosome]
+            else:
+                score = -1.0 * np.mean(cross_val_score(self.estimator, X[:,chromosome], y, 
                                                        cv=5, 
                                                        scoring="neg_mean_squared_error"))
+		self.cashe[k_chromosome]=score
             scores.append(score)
         scores, population = np.array(scores), np.array(population) 
         inds = np.argsort(scores)
