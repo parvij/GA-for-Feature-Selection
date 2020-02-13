@@ -1,4 +1,4 @@
-# genetic
+# GA for Feature Selection
 Genetic algorithm used in feature selection
 
 
