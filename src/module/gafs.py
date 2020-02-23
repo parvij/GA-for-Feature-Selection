@@ -20,9 +20,10 @@ from sklearn.feature_selection import RFECV
 import warnings
 warnings.filterwarnings("ignore")
 
-#from matplotlib.patches import Rectangle
-
-
+#checklist
+# review all variable name
+# convert all numbers to variable
+# 
 
 
 
@@ -31,7 +32,7 @@ class _chromosome():
     def __init__(self,n_features,prc_features_rand_init):
         self.mutated=False
         self.n_features = n_features
-        self.genom = np.random.rand(n_features) > prc_features_rand_init
+        self.genom = np.random.rand(n_features) < prc_features_rand_init
         self.pure_score = 0
         self.with_penalty_score =0
         self.before_mutation_score = 0
@@ -128,7 +129,7 @@ class GeneticSelector():
 
     def __init__(   self, 
                     estimator, scoring='f1',l1=0,cv=10,
-                    n_gen=10, n_best=5, n_rand=20, n_children=6, n_die=3,prc_features_rand_init=.95,
+                    n_gen=10, n_best=5, n_rand=20, n_children=6, n_die=3,prc_features_rand_init=.05,
                     initial_size_ratio=100,initial_rate_search_score=10,
                     mutation_rate=0.05,mutate_rate_micro=0.001,
                     previous_result=None,
@@ -141,7 +142,9 @@ class GeneticSelector():
                     f_extra_mutate=False,
                     f_extra_crossover_with_minimal=False,
                     f_rfecv=False,
-                    f_dynamic_child=False):
+                    f_dynamic_child=False,
+                    verbose=False,
+                    show_plots=True):
 
         self.estimator = estimator
         self.scoring = scoring        # method of evaluation
@@ -179,13 +182,22 @@ class GeneticSelector():
         self.f_extra_crossover_with_minimal=f_extra_crossover_with_minimal
         self.f_dynamic_child=f_dynamic_child
         self.f_rfecv=f_rfecv
-
+        
+        self.verbose_flag = verbose
+        self.show_plots = show_plots
         
         self.the_best=_chromosome(self.n_features,self.prc_features_rand_init)
 
         print('generation size: ',(self.n_best + self.n_rand) * self.n_children)               # number of child in each generation
-
+    
+    
+    def verbose(self,msg,end=None):
+        if self.verbose_flag:
+            print(msg,end=end)
+            
+            
     def initilize(self):
+        self.verbose('start initilize')
         population = []
 
         
@@ -222,10 +234,11 @@ class GeneticSelector():
             chromosome.create_chromosome_by_genom(self.previous_result,self.prc_features_rand_init)#************
             population_next.append(chromosome)
 
+        self.verbose('end initize')
         return population_next
     
     def calc_score(self,chromosome):
-
+        self.verbose('.',end='')
         X, y = self.dataset
 
         # mean 10 cv score
@@ -258,6 +271,7 @@ class GeneticSelector():
         return sorted_scores,sorted_population
     
     def select(self, pop_sorted):
+        self.verbose('start select')
         t0 = time()
         
         #n_best
@@ -277,15 +291,19 @@ class GeneticSelector():
             # create diversity_score order
             self.rest_pop_scores=[]
             self.rest_pop_diversity=[]
+            self.rest_pop_mutated=[]
             for rpi in rest_pop:
                 self.rest_pop_scores.append(rpi.with_penalty_score)#pure_score)
                 self.rest_pop_diversity.append(rpi.diversity_score)
+                self.rest_pop_mutated.append(rpi.mutated)
             rp_order = np.argsort(self.rest_pop_scores)+np.argsort(self.rest_pop_diversity)
             
             # for ploting pourpose
             for rpi in pop_sorted[:self.n_best]:
                 self.rest_pop_scores.append(rpi.with_penalty_score)#pure_score)
-                self.rest_pop_diversity.append(rpi.diversity_score);
+                self.rest_pop_diversity.append(rpi.diversity_score)
+                self.rest_pop_mutated.append(rpi.mutated)
+                
                 
             #SELECT BASED ON DIVERSITY_SCORE ORDER
             for i in range(int(self.n_rand/2)):
@@ -309,11 +327,12 @@ class GeneticSelector():
                 population_next.append( random.choice(pop_sorted[self.n_best:-self.n_die]) )
 
 
-            
+        self.verbose('end select')
         self.time[-1]['select'] = time()-t0
         return population_next
 
     def crossover(self, population):
+        self.verbose('start crossover')
         t0 = time()
         population_next=[]
         len_pop=len(population)
@@ -344,7 +363,7 @@ class GeneticSelector():
                     population_next.append(chromosome)
     
     
-    
+        self.verbose('end crossover')    
         self.time[-1]['crossover'] = time()-t0
         return population_next
 
@@ -355,12 +374,14 @@ class GeneticSelector():
         for i in range(len(population)):
             if random.random() < self.mutation_rate:
                 population[i].mutate(self.mutate_rate_micro)#*************
+                self.verbose(',',end='')
             population_next.append(population[i])
             
         self.time[-1]['mutate'] = time()-t0
         return population_next
     
     def extra_append(self,next_population,population_sorted):
+        self.verbose('extra_append')
         t0 = time()
         
         
@@ -418,6 +439,7 @@ class GeneticSelector():
         return next_population
     
     def keep_history(self,population_sorted,scores_sorted):
+        self.verbose('keep history')
         t0 = time()
         
         # diff_with_previous_best
@@ -436,12 +458,18 @@ class GeneticSelector():
         self.min_p.append(population_sorted[0].min_parent_score)
         self.scores_best.append(scores_sorted[0])
         self.scores_avg.append(np.mean(scores_sorted))
+        try:
+            self.mutated_avg.append(np.mean([ch.with_penalty_score for ch in population_sorted  if ch.mutated ]))
+        except:
+            self.mutated_avg.append(0)
+            raise
         self.end_of_generation_time.append(time()-self.t0)
         
         self.time[-1]['keep_history'] = time()-t0
     #########################################################
         
     def generate(self, input_population):
+        self.verbose('Start generation')
         
         self.time.append({})
         #fitness
@@ -456,7 +484,7 @@ class GeneticSelector():
         next_population = self.extra_append(deepcopy(mutate_population),population_sorted)
         #keep_history
         self.keep_history(population_sorted,scores_sorted)
-        
+        self.verbose('end generate')
         return next_population[:]
 
     def plot(self,ax4_type='Time_per_Task'):
@@ -485,6 +513,7 @@ class GeneticSelector():
         self.ax.plot(range_gl,self.scores_avg, label='Average')
         self.ax.plot(range_gl,self.min_p,label='Min parent')
         self.ax.plot(range_gl,self.max_p,label='Max parent')
+        #self.ax.plot(range_gl,self.mutated_avg, label='mutated avg')
 #         self.ax.plot([g for g in range_gl if self.max_p[g] is not None],
 #                  [self.max_p[g] for g in range_gl if self.max_p[g] is not None],
 #                label='Max_parent')
@@ -497,11 +526,18 @@ class GeneticSelector():
 
         
 #####################################        
-        self.ax2.scatter(self.rest_pop_diversity,self.rest_pop_scores,alpha=.5*(gen_len-1)/self.max_iterate+.5)
+        #self.rest_pop_mutated
+        '''
+        ax_recent = self.ax2.scatter([rpdi+random.uniform(-.4,.4) for rpdi in self.rest_pop_diversity],
+                                     self.rest_pop_scores,
+                                     alpha=.5*(gen_len-1)/self.max_iterate+.5,marker='*')
+        self.ax2.scatter(np.array(self.rest_pop_diversity)[self.rest_pop_mutated],
+                         np.array(self.rest_pop_scores)[self.rest_pop_mutated],
+                         alpha=.5*(gen_len-1)/self.max_iterate+.5,marker='.',color = 'b')#ax_recent.get_facecolors()[0])
         self.ax2.set_title('population of each generation')
         self.ax2.set_xlabel('Diversity')
         self.ax2.set_ylabel('Score')
-
+        '''
 ####################################        
         
         # we add [0] because the first generation hasn't previous one to compare
@@ -557,6 +593,7 @@ class GeneticSelector():
             plt.savefig('Pictures\\GA'+str(gen_len)+'.png')
     
     def fit(self, X, y):
+        self.verbose('start fit')
         self.time=[{}]
         t0 = time()
         self.t0 = time()
@@ -565,7 +602,7 @@ class GeneticSelector():
         
         self.scores_best , self.scores_avg , self.repeated , self.unique_cnt , self.mutation_best =[],[],[],[],[]
         self.diff_with_previous_best, self.diff_with_all_bests, self.chromosomes_best, self.min_p, self.max_p  = [],[],[],[],[]
-        self.end_of_generation_time = []
+        self.end_of_generation_time ,self.mutated_avg= [],[]
         
         self.dataset = X, y
         self.n_features = X.shape[1]
@@ -576,10 +613,10 @@ class GeneticSelector():
         i=0
         while (i < self.n_gen or                      # number of generation
                np.std(self.scores_best[-10:])!=0 or   # if best score is growing
-               np.std(self.max_p[-9:])!=0 or          # if best score is growing
-               np.std(self.min_p[-8:])!=0             # if best score is growing
+               np.std(self.max_p[-9:])!=0 or          # if max of parent is growing
+               np.std(self.min_p[-8:])!=0             # if min of parent is growing
                ):   
-            
+            self.verbose('i='+str(i))
             self.time[-1]['marginal'] = time()-t0
             self.df_time = pd.DataFrame(self.time)
             self.df_time.insert(0,'start',0)
@@ -591,7 +628,8 @@ class GeneticSelector():
             
             
             t0 = time()
-            self.plot('score_per_time')
+            if self.show_plots:
+                self.plot('score_per_time')
    
             i+=1
             # end function if it reach max iteration
@@ -612,3 +650,48 @@ class GeneticSelector():
     @property
     def support_(self):
         return self.the_best.genom
+    
+    
+    
+    
+
+
+
+
+if __name__ == '__main__':
+    import sys
+    sys.path.append('../src/')
+    
+    
+    X = pd.read_csv(r'../../data/data_modified.csv',header=None,prefix='c')
+    y = pd.read_csv(r'../../data/labels_modified.csv',header=None)
+    y.columns=['CANCER_TYPE']
+    y_d = pd.get_dummies(y, columns=['CANCER_TYPE'])
+    
+    sel = GeneticSelector(estimator= LogisticRegression(),#SVC(kernel='linear', C=0.00005), 
+                            n_gen=5, 
+                            n_best=2, # small number will not coverge, big number respect to n_rand will stick in local optimum
+                            n_rand=10, # small number stick in local optimum,   big number has time cost
+                            n_children=2, # big number stick in local optimum,    small number will not converge
+                            n_die=2,
+                            prc_features_rand_init=.05,
+                            initial_size_ratio=10,
+                            initial_rate_search_score=3,
+                            mutation_rate=0.2,
+                            scoring="f1",
+                            mutate_rate_micro=0.001,
+                            l1=0.005,
+                            previous_result=None,
+                            n_jobs=-1,
+                            max_iterate=10,                    
+                            f_diverse=True,                    
+                            f_periority_in_crossover=False,     
+                            f_extra_best_previous=False,        
+                            f_extra_bests_previous=False,      
+                            f_extra_mutate=False,              
+                            f_extra_crossover_with_minimal=False,
+                            f_rfecv=True,
+                            f_dynamic_child=True,
+                            verbose=True,
+                            show_plots=False)
+    sel.fit(X, y_d['CANCER_TYPE_0'])        
