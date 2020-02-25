@@ -484,6 +484,7 @@ class GeneticSelector():
         next_population = self.extra_append(deepcopy(mutate_population),population_sorted)
         #keep_history
         self.keep_history(population_sorted,scores_sorted)
+        self.verbose('best scores of generation: '+str(scores_sorted[-1]))
         self.verbose('end generate')
         return next_population[:]
 
@@ -513,10 +514,10 @@ class GeneticSelector():
         self.ax.plot(range_gl,self.scores_avg, label='Average')
         self.ax.plot(range_gl,self.min_p,label='Min parent')
         self.ax.plot(range_gl,self.max_p,label='Max parent')
-        #self.ax.plot(range_gl,self.mutated_avg, label='mutated avg')
-#         self.ax.plot([g for g in range_gl if self.max_p[g] is not None],
-#                  [self.max_p[g] for g in range_gl if self.max_p[g] is not None],
-#                label='Max_parent')
+        self.ax.plot(range_gl,self.mutated_avg, label='mutated avg')
+        self.ax.plot([g for g in range_gl if self.max_p[g] is not None],
+                        [self.max_p[g] for g in range_gl if self.max_p[g] is not None],
+                        label='Max_parent')
         self.ax.scatter([g+1 for g in range(gen_len) if self.mutation_best[g]],
                    [self.scores_best[g] for g in range(gen_len) if self.mutation_best[g]],
                    label='Had mutation')
@@ -527,7 +528,7 @@ class GeneticSelector():
         
 #####################################        
         #self.rest_pop_mutated
-        '''
+        
         ax_recent = self.ax2.scatter([rpdi+random.uniform(-.4,.4) for rpdi in self.rest_pop_diversity],
                                      self.rest_pop_scores,
                                      alpha=.5*(gen_len-1)/self.max_iterate+.5,marker='*')
@@ -537,7 +538,7 @@ class GeneticSelector():
         self.ax2.set_title('population of each generation')
         self.ax2.set_xlabel('Diversity')
         self.ax2.set_ylabel('Score')
-        '''
+        
 ####################################        
         
         # we add [0] because the first generation hasn't previous one to compare
