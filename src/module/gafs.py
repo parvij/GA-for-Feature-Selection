@@ -41,7 +41,15 @@ class _chromosome():
         self.generation_lived_longer=0
         self.diversity_score=math.inf
         self.chromosome_age=0
-    
+        self.genom_string = ''
+
+    def genom_str(self):
+        if self.genom_string=='':
+            gnm_str_arr=np.array(self.genom).astype(int).astype(str)
+            self.genom_string = ''.join(gnm_str_arr)
+        return self.genom_string
+
+
     def create_chromosome_by_genom(self,genom):
         self.genom = genom
 
@@ -143,6 +151,7 @@ class GeneticSelector():
                     f_extra_crossover_with_minimal=False,
                     f_rfecv=False,
                     f_dynamic_child=False,
+                    f_cashe=False,
                     verbose=False,
                     show_plots=True):
 
@@ -182,6 +191,9 @@ class GeneticSelector():
         self.f_extra_crossover_with_minimal=f_extra_crossover_with_minimal
         self.f_dynamic_child=f_dynamic_child
         self.f_rfecv=f_rfecv
+        self.f_cashe = f_cashe
+
+        self.cashe = {}
         
         self.verbose_flag = verbose
         self.show_plots = show_plots
@@ -238,17 +250,20 @@ class GeneticSelector():
         return population_next
     
     def calc_score(self,chromosome):
-        self.verbose('.',end='')
         X, y = self.dataset
 
         # mean 10 cv score
-        estimator_score = np.mean(  cross_val_score(self.estimator, 
-                                                    X.loc[:,chromosome.genom], 
-                                                    y, 
-                                                    cv=self.cv, 
-                                                    scoring=self.scoring))
+        if self.f_cashe and chromosome.genom_str() in self.cashe.keys():
+            estimator_score = self.cashe[chromosome.genom_str()]
+        else:
+            estimator_score = np.mean(  cross_val_score(self.estimator, 
+                                                        X.loc[:,chromosome.genom], 
+                                                        y, 
+                                                        cv=self.cv, 
+                                                        scoring=self.scoring))
         
         chromosome.set_score(estimator_score,self.l1)#***************
+        self.cashe[chromosome.genom_str()] = estimator_score
 
         #score *100 - l1 penalty
         return chromosome.with_penalty_score  #( estimator_score * 100 ) - l1_penalty 
@@ -515,9 +530,9 @@ class GeneticSelector():
         self.ax.plot(range_gl,self.min_p,label='Min parent')
         self.ax.plot(range_gl,self.max_p,label='Max parent')
         self.ax.plot(range_gl,self.mutated_avg, label='mutated avg')
-        self.ax.plot([g for g in range_gl if self.max_p[g] is not None],
-                        [self.max_p[g] for g in range_gl if self.max_p[g] is not None],
-                        label='Max_parent')
+#        self.ax.plot([g for g in range_gl if self.max_p[g] is not None],
+#                        [self.max_p[g] for g in range_gl if self.max_p[g] is not None],
+#                        label='Max_parent')
         self.ax.scatter([g+1 for g in range(gen_len) if self.mutation_best[g]],
                    [self.scores_best[g] for g in range(gen_len) if self.mutation_best[g]],
                    label='Had mutation')
